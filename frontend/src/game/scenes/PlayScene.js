@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { LEVELS } from '../levels/index.js'
+import { generateEndlessLevel } from '../levels/endless.js'
 import { saveProgress } from '../services/saveService.js'
 import { playJump, playCoin, playEnemyStomp, playPlayerHit, playGameOver } from '../services/soundManager.js'
 import { touch } from '../services/touchInput.js'
@@ -12,9 +13,10 @@ const INVINCIBILITY_MS = 1500
 const ENEMY_SPEED      = 80
 const STOMP_BOUNCE     = -280
 const MAX_HP           = 3
-const LEVEL_TIME       = 400
-const COIN_POINTS      = 200
-const STOMP_POINTS     = 100
+const LEVEL_TIME         = 400
+const COIN_POINTS        = 200
+const STOMP_POINTS       = 100
+const WAVE_BONUS_PER_WAVE = 500
 
 export default class PlayScene extends Phaser.Scene {
   constructor() {
@@ -23,21 +25,27 @@ export default class PlayScene extends Phaser.Scene {
 
   init(data) {
     this.levelIndex     = data.levelIndex ?? 0
+    this.levelConfig    = data.levelConfig ?? null   // explicit config overrides levelIndex
     this.score          = data.score ?? 0
     this.unlockedLevels = data.unlockedLevels ?? [0]
     this.hp             = data.hp ?? MAX_HP
     this.coinsCollected = data.coinsCollected ?? 0
-    this.timeLeft       = LEVEL_TIME
     this.wasOnGround    = true
     this.jumpAnimating  = false
     this.invincible     = false
     this.transitioning  = false
     this.playerDir      = 1
+    // Endless mode
+    this.endless        = data.endless ?? false
+    this.wave           = data.wave ?? 1
+    this.wavesCompleted = data.wavesCompleted ?? 0
   }
 
   create() {
     const { width, height } = this.scale
-    this.cfg = LEVELS[this.levelIndex]
+    this.cfg = this.levelConfig ?? LEVELS[this.levelIndex]
+    this.timeLeft           = this.cfg.timeLimit ?? LEVEL_TIME
+    this.effectiveEnemySpeed = ENEMY_SPEED * (this.cfg.enemySpeedMult ?? 1)
 
     this.cameras.main.setBackgroundColor(this.cfg.background)
 
@@ -126,9 +134,10 @@ export default class PlayScene extends Phaser.Scene {
 
   _startTimer() {
     if (this.timerEvent) this.timerEvent.remove()
+    const duration = this.cfg.timeLimit ?? LEVEL_TIME
     this.timerEvent = this.time.addEvent({
       delay: 1000,
-      repeat: LEVEL_TIME - 1,
+      repeat: duration - 1,
       callback: () => {
         if (this.transitioning) return
         this.timeLeft = Math.max(0, this.timeLeft - 1)
@@ -145,6 +154,33 @@ export default class PlayScene extends Phaser.Scene {
     this.transitioning = true
     if (this.timerEvent) this.timerEvent.remove()
     this.player.body.setVelocity(0, 0)
+
+    if (this.endless) {
+      const waveBonus = WAVE_BONUS_PER_WAVE * this.wave
+      this.score += waveBonus
+      const nextWave = this.wave + 1
+
+      this.add.text(
+        this.scale.width / 2, this.scale.height / 2,
+        `Wave ${this.wave} Complete!\n+${waveBonus} pts`,
+        { fontSize: '32px', fontFamily: 'Arial Black', color: '#ffd700',
+          stroke: '#000', strokeThickness: 5, align: 'center' }
+      ).setOrigin(0.5).setScrollFactor(0).setDepth(20)
+
+      this.cameras.main.fadeOut(1200, 0, 0, 0)
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.restart({
+          endless: true,
+          wave: nextWave,
+          wavesCompleted: this.wavesCompleted + 1,
+          levelConfig: generateEndlessLevel(nextWave),
+          score: this.score,
+          hp: this.hp,
+          coinsCollected: this.coinsCollected,
+        })
+      })
+      return
+    }
 
     const next      = this.cfg.nextLevel
     const nextIndex = next !== null && LEVELS[next] !== undefined ? next : null
@@ -185,7 +221,11 @@ export default class PlayScene extends Phaser.Scene {
 
     this.cameras.main.fadeOut(1500, 0, 0, 0)
     this.cameras.main.once('camerafadeoutcomplete', () => {
-      this.scene.start('GameScene', { gameOver: true, score: this.score })
+      this.scene.start('GameScene', {
+        gameOver: true,
+        score:    this.score,
+        waves:    this.endless ? this.wavesCompleted : 0,
+      })
     })
   }
 
@@ -195,9 +235,9 @@ export default class PlayScene extends Phaser.Scene {
     this.enemyList.forEach(rect => {
       if (!rect.active || !rect.alive) return
       const vx = rect.body.velocity.x
-      if      (rect.x <= rect.patrolLeft  || rect.body.blocked.left)  rect.body.setVelocityX(ENEMY_SPEED)
-      else if (rect.x >= rect.patrolRight || rect.body.blocked.right) rect.body.setVelocityX(-ENEMY_SPEED)
-      else if (vx === 0)                                               rect.body.setVelocityX(ENEMY_SPEED)
+      if      (rect.x <= rect.patrolLeft  || rect.body.blocked.left)  rect.body.setVelocityX(this.effectiveEnemySpeed)
+      else if (rect.x >= rect.patrolRight || rect.body.blocked.right) rect.body.setVelocityX(-this.effectiveEnemySpeed)
+      else if (vx === 0)                                               rect.body.setVelocityX(this.effectiveEnemySpeed)
 
       // Sync dragon graphic
       if (rect.gfx) {
@@ -406,10 +446,12 @@ export default class PlayScene extends Phaser.Scene {
       })
       .setScrollFactor(0).setDepth(11)
 
-    // Level name (centre)
+    // Level name / wave indicator (centre)
+    const hudLabel = this.endless ? `WAVE  ${this.wave}` : this.cfg.name
+    const hudColor = this.endless ? '#ffd700' : '#ffffff'
     this.add
-      .text(width / 2, 11, this.cfg.name, {
-        fontSize: '15px', fontFamily: 'Arial', color: '#ffffff',
+      .text(width / 2, 11, hudLabel, {
+        fontSize: '15px', fontFamily: 'Arial Black', color: hudColor,
         stroke: '#000', strokeThickness: 2,
       })
       .setOrigin(0.5, 0).setScrollFactor(0).setDepth(11)

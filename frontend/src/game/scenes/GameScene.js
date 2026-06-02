@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { loadProgress, clearProgress } from '../services/saveService.js'
+import { generateEndlessLevel } from '../levels/endless.js'
 
 function submitScore(username, score) {
   fetch('/api/scores', {
@@ -18,6 +19,7 @@ export default class GameScene extends Phaser.Scene {
     this.won        = data?.won      ?? false
     this.gameOver   = data?.gameOver ?? false
     this.finalScore = data?.score    ?? 0
+    this.waves      = data?.waves    ?? 0
   }
 
   async create() {
@@ -46,15 +48,35 @@ export default class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
 
+    this.add
+      .text(width / 2, height / 2 + 50, 'Press E for Endless Mode', {
+        fontSize: '16px',
+        fontFamily: 'Arial',
+        color: '#ff88ff',
+        stroke: '#000000',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+
     this.input.keyboard.on('keydown-ENTER', () => {
       clearProgress()
       this.scene.start('PlayScene', { levelIndex: 0, score: 0, unlockedLevels: [0] })
     })
 
+    this.input.keyboard.on('keydown-E', () => {
+      this.scene.start('PlayScene', {
+        endless:     true,
+        wave:        1,
+        wavesCompleted: 0,
+        levelConfig: generateEndlessLevel(1),
+        score:       0,
+      })
+    })
+
     const save = await loadProgress()
     if (save && save.levelIndex > 0) {
       const continueText = this.add
-        .text(width / 2, height / 2 + 55, `Press C to continue  (Level ${save.levelIndex + 1}, Score ${save.score})`, {
+        .text(width / 2, height / 2 + 90, `Press C to continue  (Level ${save.levelIndex + 1}, Score ${save.score})`, {
           fontSize: '16px',
           fontFamily: 'Arial',
           color: '#aaffaa',
@@ -136,20 +158,42 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _showGameOverScreen(width, height) {
-    this.add.text(width / 2, height / 2 - 40, 'GAME OVER', {
+    this.add.text(width / 2, height / 2 - 55, 'GAME OVER', {
       fontSize: '48px', fontFamily: 'Arial Black, Arial',
       color: '#ff3333', stroke: '#000000', strokeThickness: 6,
     }).setOrigin(0.5)
 
-    this.add.text(width / 2, height / 2 + 20, `Score: ${this.finalScore}`, {
+    if (this.waves > 0) {
+      this.add.text(width / 2, height / 2 + 5, `Waves Survived: ${this.waves}`, {
+        fontSize: '20px', fontFamily: 'Arial',
+        color: '#ff88ff', stroke: '#000000', strokeThickness: 3,
+      }).setOrigin(0.5)
+    }
+
+    this.add.text(width / 2, height / 2 + (this.waves > 0 ? 38 : 20), `Score: ${this.finalScore}`, {
       fontSize: '22px', fontFamily: 'Arial',
       color: '#ffffff', stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5)
 
-    this.add.text(width / 2, height / 2 + 65, 'Press ENTER to try again', {
+    const retryY = height / 2 + (this.waves > 0 ? 80 : 65)
+    this.add.text(width / 2, retryY, 'Press ENTER to try again', {
       fontSize: '16px', fontFamily: 'Arial',
       color: '#ffe000', stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5)
+
+    if (this.waves > 0) {
+      this.add.text(width / 2, retryY + 36, 'Press E for Endless again', {
+        fontSize: '14px', fontFamily: 'Arial',
+        color: '#ff88ff', stroke: '#000000', strokeThickness: 2,
+      }).setOrigin(0.5)
+
+      this.input.keyboard.once('keydown-E', () => {
+        this.scene.start('PlayScene', {
+          endless: true, wave: 1, wavesCompleted: 0,
+          levelConfig: generateEndlessLevel(1), score: 0,
+        })
+      })
+    }
 
     this.input.keyboard.once('keydown-ENTER', () => {
       clearProgress()
