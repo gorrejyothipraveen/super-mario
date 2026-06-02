@@ -29,7 +29,7 @@ export default class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
 
     this.input.keyboard.on('keydown-ENTER', () => {
-      // Will navigate to game start in a future story
+      this.scene.start('PlayScene')
     })
   }
 }
