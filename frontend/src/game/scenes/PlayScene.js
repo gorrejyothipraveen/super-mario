@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import { LEVELS } from '../levels/index.js'
 import { saveProgress } from '../services/saveService.js'
 import { playJump, playCoin, playEnemyStomp, playPlayerHit, playGameOver } from '../services/soundManager.js'
+import { touch } from '../services/touchInput.js'
 
 const PLAYER_SPEED      = 200
 const JUMP_VELOCITY     = -450
@@ -54,12 +55,13 @@ export default class PlayScene extends Phaser.Scene {
     if (this.transitioning) return
 
     const onGround   = this.player.body.blocked.down
-    const left       = this.cursors.left.isDown || this.wasd.left.isDown
-    const right      = this.cursors.right.isDown || this.wasd.right.isDown
+    const left       = this.cursors.left.isDown || this.wasd.left.isDown || touch.left
+    const right      = this.cursors.right.isDown || this.wasd.right.isDown || touch.right
     const jumpPressed =
       this.cursors.up.isDown ||
       this.cursors.space.isDown ||
-      this.wasd.up.isDown
+      this.wasd.up.isDown ||
+      touch.jump
 
     if (left)       this.player.body.setVelocityX(-PLAYER_SPEED)
     else if (right) this.player.body.setVelocityX(PLAYER_SPEED)
