@@ -1,4 +1,4 @@
-import { saveScore, getLeaderboard, getHighScore } from '../models/scoreModel.js'
+import { saveScore, getLeaderboard, getHighScore, getBestPerPlayer } from '../models/scoreModel.js'
 
 export function submitScore(req, res, next) {
   try {
@@ -17,6 +17,15 @@ export function listLeaderboard(req, res, next) {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 10, 100)
     res.json(getLeaderboard(limit))
+  } catch (err) {
+    next(err)
+  }
+}
+
+export function bestLeaderboard(req, res, next) {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 10, 100)
+    res.json(getBestPerPlayer(limit))
   } catch (err) {
     next(err)
   }

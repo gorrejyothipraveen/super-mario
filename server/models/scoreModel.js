@@ -21,3 +21,15 @@ export function getHighScore(username) {
     .prepare('SELECT * FROM scores WHERE username = ? ORDER BY score DESC LIMIT 1')
     .get(username)
 }
+
+export function getBestPerPlayer(limit = 10) {
+  return db
+    .prepare(`
+      SELECT username, MAX(score) AS score, COUNT(*) AS plays
+      FROM scores
+      GROUP BY username
+      ORDER BY score DESC
+      LIMIT ?
+    `)
+    .all(limit)
+}

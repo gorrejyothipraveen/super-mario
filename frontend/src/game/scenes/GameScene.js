@@ -1,6 +1,14 @@
 import Phaser from 'phaser'
 import { loadProgress, clearProgress } from '../services/saveService.js'
 
+function submitScore(username, score) {
+  fetch('/api/scores', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, score }),
+  }).catch(() => {})
+}
+
 export default class GameScene extends Phaser.Scene {
   constructor() {
     super({ key: 'GameScene' })
@@ -75,6 +83,9 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _showWinScreen(width, height) {
+    const username = localStorage.getItem('smario_username') || 'guest'
+    submitScore(username, this.finalScore)
+
     this.add
       .text(width / 2, height / 2 - 40, '🎉 You Win! 🎉', {
         fontSize: '42px',
@@ -105,9 +116,23 @@ export default class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
 
+    this.add
+      .text(width / 2, height / 2 + 105, 'Press L to view Leaderboard', {
+        fontSize: '14px',
+        fontFamily: 'Arial',
+        color: '#aaffaa',
+        stroke: '#000000',
+        strokeThickness: 2,
+      })
+      .setOrigin(0.5)
+
     this.input.keyboard.once('keydown-ENTER', () => {
       clearProgress()
       this.scene.start('PlayScene', { levelIndex: 0, score: 0, unlockedLevels: [0] })
+    })
+
+    this.input.keyboard.once('keydown-L', () => {
+      window.location.href = '/leaderboard'
     })
   }
 }

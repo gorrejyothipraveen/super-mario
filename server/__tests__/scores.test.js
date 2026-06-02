@@ -39,6 +39,22 @@ describe('GET /api/scores', () => {
   })
 })
 
+describe('GET /api/scores/best', () => {
+  it('returns one entry per player with their best score', async () => {
+    await request(app).post('/api/scores').send({ username: 'wario', score: 100 })
+    await request(app).post('/api/scores').send({ username: 'wario', score: 800 })
+    await request(app).post('/api/scores').send({ username: 'waluigi', score: 400 })
+    const res = await request(app).get('/api/scores/best')
+    expect(res.status).toBe(200)
+    const wario = res.body.find(e => e.username === 'wario')
+    expect(wario.score).toBe(800)
+    const names = res.body.map(e => e.username)
+    expect(new Set(names).size).toBe(names.length)
+    const scores = res.body.map(e => e.score)
+    expect(scores).toEqual([...scores].sort((a, b) => b - a))
+  })
+})
+
 describe('GET /api/scores/:username/high', () => {
   it('returns the highest score for a player', async () => {
     await request(app).post('/api/scores').send({ username: 'toad', score: 10 })
