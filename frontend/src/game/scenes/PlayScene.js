@@ -5,6 +5,8 @@ const JUMP_VELOCITY = -450
 const KNOCKBACK_X = 280
 const KNOCKBACK_Y = -220
 const INVINCIBILITY_REPEAT = 5
+const ENEMY_SPEED = 80
+const STOMP_BOUNCE = -280
 
 export default class PlayScene extends Phaser.Scene {
   constructor() {
@@ -53,17 +55,57 @@ export default class PlayScene extends Phaser.Scene {
     }
 
     this.wasOnGround = onGround
+    this._updateEnemies()
+  }
+
+  // --- enemy AI ---
+
+  _updateEnemies() {
+    this.enemyList.forEach(rect => {
+      if (!rect.active || !rect.alive) return
+      const vx = rect.body.velocity.x
+      if (rect.x <= rect.patrolLeft || rect.body.blocked.left) {
+        rect.body.setVelocityX(ENEMY_SPEED)
+      } else if (rect.x >= rect.patrolRight || rect.body.blocked.right) {
+        rect.body.setVelocityX(-ENEMY_SPEED)
+      } else if (vx === 0) {
+        rect.body.setVelocityX(ENEMY_SPEED)
+      }
+    })
+  }
+
+  _killEnemy(rect) {
+    if (!rect.alive) return
+    rect.alive = false
+    rect.body.setVelocity(0, 0)
+    rect.body.setAllowGravity(false)
+    this.tweens.add({
+      targets: rect,
+      scaleY: 0.1,
+      y: rect.y + 14,
+      duration: 150,
+      ease: 'Power2',
+      onComplete: () => { rect.destroy() },
+    })
   }
 
   // --- collision callbacks ---
 
-  _onHitEnemy(player, enemy) {
+  _onHitEnemy(player, enemyRect) {
+    if (!enemyRect.alive) return
+
+    // Stomp: player center is above enemy center and moving downward
+    if (player.y < enemyRect.y && player.body.velocity.y >= 0) {
+      this._killEnemy(enemyRect)
+      player.body.setVelocityY(STOMP_BOUNCE)
+      return
+    }
+
+    // Side hit
     if (this.invincible) return
     this.invincible = true
-
-    const knockDir = player.x <= enemy.x ? -1 : 1
+    const knockDir = player.x <= enemyRect.x ? -1 : 1
     player.body.setVelocity(knockDir * KNOCKBACK_X, KNOCKBACK_Y)
-
     this.tweens.add({
       targets: player,
       alpha: 0.2,
@@ -126,16 +168,25 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   _createEnemies(width, height) {
-    this.enemies = this.physics.add.staticGroup()
+    this.enemyList = []
+    this.enemies = this.physics.add.group()
+
     const defs = [
-      { x: width * 0.42, y: height - 48 },
-      { x: width * 0.68, y: height - 48 },
-      { x: width * 0.55, y: height - 236 },
+      { x: width * 0.42, y: height - 64,  left: width * 0.30, right: width * 0.54 },
+      { x: width * 0.68, y: height - 64,  left: width * 0.58, right: width * 0.82 },
+      { x: width * 0.55, y: height - 250, left: width * 0.45, right: width * 0.65 },
     ]
-    defs.forEach(({ x, y }) => {
+
+    defs.forEach(({ x, y, left, right }) => {
       const rect = this.add.rectangle(x, y, 32, 32, 0x9b59b6)
-      this.physics.add.existing(rect, true)
+      this.physics.add.existing(rect, false)
+      rect.body.setCollideWorldBounds(true)
+      rect.body.setVelocityX(ENEMY_SPEED)
+      rect.patrolLeft = left
+      rect.patrolRight = right
+      rect.alive = true
       this.enemies.add(rect)
+      this.enemyList.push(rect)
     })
   }
 
@@ -148,6 +199,7 @@ export default class PlayScene extends Phaser.Scene {
 
   _setupCollisions() {
     this.physics.add.collider(this.player, this.platforms)
+    this.physics.add.collider(this.enemies, this.platforms)
     this.physics.add.collider(this.player, this.enemies, this._onHitEnemy, null, this)
   }
 
@@ -162,7 +214,7 @@ export default class PlayScene extends Phaser.Scene {
 
   _createHUD() {
     this.add
-      .text(10, 10, 'Arrow keys / WASD to move  |  UP / W / SPACE to jump', {
+      .text(10, 10, 'Arrow keys / WASD to move  |  UP / W / SPACE to jump  |  Stomp enemies!', {
         fontSize: '13px',
         fontFamily: 'Arial',
         color: '#ffffff',
