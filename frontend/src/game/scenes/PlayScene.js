@@ -6,12 +6,15 @@ const JUMP_VELOCITY = -450
 export default class PlayScene extends Phaser.Scene {
   constructor() {
     super({ key: 'PlayScene' })
+    this.wasOnGround = true
+    this.jumpAnimating = false
   }
 
   create() {
     const { width, height } = this.scale
 
     this._createGround(width, height)
+    this._createPlatforms(width, height)
     this._createPlayer(height)
     this._createControls()
     this._createHUD()
@@ -21,11 +24,10 @@ export default class PlayScene extends Phaser.Scene {
     const onGround = this.player.body.blocked.down
     const left = this.cursors.left.isDown || this.wasd.left.isDown
     const right = this.cursors.right.isDown || this.wasd.right.isDown
-    const jump =
-      (this.cursors.up.isDown ||
-        this.cursors.space.isDown ||
-        this.wasd.up.isDown) &&
-      onGround
+    const jumpPressed =
+      this.cursors.up.isDown ||
+      this.cursors.space.isDown ||
+      this.wasd.up.isDown
 
     if (left) {
       this.player.body.setVelocityX(-PLAYER_SPEED)
@@ -35,15 +37,65 @@ export default class PlayScene extends Phaser.Scene {
       this.player.body.setVelocityX(0)
     }
 
-    if (jump) {
+    if (jumpPressed && onGround) {
       this.player.body.setVelocityY(JUMP_VELOCITY)
+      this._playJumpStretch()
     }
+
+    // Detect landing
+    if (!this.wasOnGround && onGround) {
+      this._playLandSquash()
+    }
+
+    this.wasOnGround = onGround
+  }
+
+  _playJumpStretch() {
+    if (this.jumpAnimating) return
+    this.jumpAnimating = true
+    this.tweens.add({
+      targets: this.player,
+      scaleX: 0.75,
+      scaleY: 1.3,
+      duration: 80,
+      yoyo: true,
+      onComplete: () => {
+        this.jumpAnimating = false
+      },
+    })
+  }
+
+  _playLandSquash() {
+    this.tweens.add({
+      targets: this.player,
+      scaleX: 1.3,
+      scaleY: 0.7,
+      duration: 60,
+      yoyo: true,
+      ease: 'Sine.easeOut',
+    })
   }
 
   _createGround(width, height) {
     const groundRect = this.add.rectangle(width / 2, height - 16, width, 32, 0x8b4513)
     this.physics.add.existing(groundRect, true)
     this.ground = groundRect
+    this.platforms = this.physics.add.staticGroup()
+    this.platforms.add(groundRect)
+  }
+
+  _createPlatforms(width, height) {
+    const defs = [
+      { x: width * 0.25, y: height - 130, w: 140 },
+      { x: width * 0.55, y: height - 210, w: 160 },
+      { x: width * 0.8,  y: height - 150, w: 120 },
+    ]
+
+    defs.forEach(({ x, y, w }) => {
+      const rect = this.add.rectangle(x, y, w, 20, 0x228b22)
+      this.physics.add.existing(rect, true)
+      this.platforms.add(rect)
+    })
   }
 
   _createPlayer(height) {
@@ -51,7 +103,7 @@ export default class PlayScene extends Phaser.Scene {
     this.physics.add.existing(playerRect, false)
     this.player = playerRect
     this.player.body.setCollideWorldBounds(true)
-    this.physics.add.collider(this.player, this.ground)
+    this.physics.add.collider(this.player, this.platforms)
   }
 
   _createControls() {
