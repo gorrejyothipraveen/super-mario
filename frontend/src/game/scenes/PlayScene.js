@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { LEVELS } from '../levels/index.js'
+import { saveProgress } from '../services/saveService.js'
 
 const PLAYER_SPEED = 200
 const JUMP_VELOCITY = -450
@@ -17,6 +18,7 @@ export default class PlayScene extends Phaser.Scene {
   init(data) {
     this.levelIndex = data.levelIndex ?? 0
     this.score = data.score ?? 0
+    this.unlockedLevels = data.unlockedLevels ?? [0]
     this.wasOnGround = true
     this.jumpAnimating = false
     this.invincible = false
@@ -80,11 +82,22 @@ export default class PlayScene extends Phaser.Scene {
 
     this.player.body.setVelocity(0, 0)
 
+    const next = this.cfg.nextLevel
+    const nextIndex = next !== null && LEVELS[next] !== undefined ? next : null
+    const unlocked = nextIndex !== null && !this.unlockedLevels.includes(nextIndex)
+      ? [...this.unlockedLevels, nextIndex]
+      : this.unlockedLevels
+
+    saveProgress(
+      nextIndex ?? this.levelIndex,
+      this.score,
+      unlocked,
+    )
+
     this.cameras.main.fadeOut(600, 0, 0, 0)
     this.cameras.main.once('camerafadeoutcomplete', () => {
-      const next = this.cfg.nextLevel
-      if (next !== null && LEVELS[next] !== undefined) {
-        this.scene.restart({ levelIndex: next, score: this.score })
+      if (nextIndex !== null) {
+        this.scene.restart({ levelIndex: nextIndex, score: this.score, unlockedLevels: unlocked })
       } else {
         this.scene.start('GameScene', { won: true, score: this.score })
       }

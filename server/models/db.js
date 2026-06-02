@@ -16,7 +16,16 @@ db.exec(`
     username  TEXT    NOT NULL,
     score     INTEGER NOT NULL,
     created_at TEXT   NOT NULL DEFAULT (datetime('now'))
-  )
+  );
+
+  CREATE TABLE IF NOT EXISTS saves (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    username        TEXT    NOT NULL UNIQUE,
+    level_index     INTEGER NOT NULL DEFAULT 0,
+    score           INTEGER NOT NULL DEFAULT 0,
+    unlocked_levels TEXT    NOT NULL DEFAULT '[0]',
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
 `)
 
 export default db
