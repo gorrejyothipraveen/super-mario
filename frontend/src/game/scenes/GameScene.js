@@ -15,17 +15,16 @@ export default class GameScene extends Phaser.Scene {
   }
 
   init(data) {
-    this.won = data?.won ?? false
-    this.finalScore = data?.score ?? 0
+    this.won        = data?.won      ?? false
+    this.gameOver   = data?.gameOver ?? false
+    this.finalScore = data?.score    ?? 0
   }
 
   async create() {
     const { width, height } = this.scale
 
-    if (this.won) {
-      this._showWinScreen(width, height)
-      return
-    }
+    if (this.won)      { this._showWinScreen(width, height);    return }
+    if (this.gameOver) { this._showGameOverScreen(width, height); return }
 
     this.add
       .text(width / 2, height / 2 - 60, 'Super Mario Web Game', {
@@ -133,6 +132,28 @@ export default class GameScene extends Phaser.Scene {
 
     this.input.keyboard.once('keydown-L', () => {
       window.location.href = '/leaderboard'
+    })
+  }
+
+  _showGameOverScreen(width, height) {
+    this.add.text(width / 2, height / 2 - 40, 'GAME OVER', {
+      fontSize: '48px', fontFamily: 'Arial Black, Arial',
+      color: '#ff3333', stroke: '#000000', strokeThickness: 6,
+    }).setOrigin(0.5)
+
+    this.add.text(width / 2, height / 2 + 20, `Score: ${this.finalScore}`, {
+      fontSize: '22px', fontFamily: 'Arial',
+      color: '#ffffff', stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5)
+
+    this.add.text(width / 2, height / 2 + 65, 'Press ENTER to try again', {
+      fontSize: '16px', fontFamily: 'Arial',
+      color: '#ffe000', stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5)
+
+    this.input.keyboard.once('keydown-ENTER', () => {
+      clearProgress()
+      this.scene.start('PlayScene', { levelIndex: 0, score: 0, unlockedLevels: [0] })
     })
   }
 }

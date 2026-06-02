@@ -2,13 +2,16 @@ import Phaser from 'phaser'
 import { LEVELS } from '../levels/index.js'
 import { saveProgress } from '../services/saveService.js'
 
-const PLAYER_SPEED = 200
-const JUMP_VELOCITY = -450
-const KNOCKBACK_X = 280
-const KNOCKBACK_Y = -220
-const INVINCIBILITY_REPEAT = 5
-const ENEMY_SPEED = 80
-const STOMP_BOUNCE = -280
+const PLAYER_SPEED      = 200
+const JUMP_VELOCITY     = -450
+const KNOCKBACK_X       = 280
+const KNOCKBACK_Y       = -220
+const INVINCIBILITY_MS  = 1500
+const ENEMY_SPEED       = 80
+const STOMP_BOUNCE      = -280
+const MAX_HP            = 3
+const LEVEL_TIME        = 300
+const COIN_POINTS       = 10
 
 export default class PlayScene extends Phaser.Scene {
   constructor() {
@@ -16,13 +19,16 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   init(data) {
-    this.levelIndex = data.levelIndex ?? 0
-    this.score = data.score ?? 0
-    this.unlockedLevels = data.unlockedLevels ?? [0]
-    this.wasOnGround = true
-    this.jumpAnimating = false
-    this.invincible = false
-    this.transitioning = false
+    this.levelIndex      = data.levelIndex ?? 0
+    this.score           = data.score ?? 0
+    this.unlockedLevels  = data.unlockedLevels ?? [0]
+    this.hp              = data.hp ?? MAX_HP
+    this.coinsCollected  = data.coinsCollected ?? 0
+    this.timeLeft        = LEVEL_TIME
+    this.wasOnGround     = true
+    this.jumpAnimating   = false
+    this.invincible      = false
+    this.transitioning   = false
   }
 
   create() {
@@ -40,67 +46,99 @@ export default class PlayScene extends Phaser.Scene {
     this._setupCollisions()
     this._createControls()
     this._createHUD(width)
+    this._startTimer()
   }
 
   update() {
     if (this.transitioning) return
 
-    const onGround = this.player.body.blocked.down
-    const left = this.cursors.left.isDown || this.wasd.left.isDown
-    const right = this.cursors.right.isDown || this.wasd.right.isDown
+    const onGround   = this.player.body.blocked.down
+    const left       = this.cursors.left.isDown || this.wasd.left.isDown
+    const right      = this.cursors.right.isDown || this.wasd.right.isDown
     const jumpPressed =
       this.cursors.up.isDown ||
       this.cursors.space.isDown ||
       this.wasd.up.isDown
 
-    if (left) {
-      this.player.body.setVelocityX(-PLAYER_SPEED)
-    } else if (right) {
-      this.player.body.setVelocityX(PLAYER_SPEED)
-    } else {
-      this.player.body.setVelocityX(0)
-    }
+    if (left)       this.player.body.setVelocityX(-PLAYER_SPEED)
+    else if (right) this.player.body.setVelocityX(PLAYER_SPEED)
+    else            this.player.body.setVelocityX(0)
 
     if (jumpPressed && onGround) {
       this.player.body.setVelocityY(JUMP_VELOCITY)
       this._playJumpStretch()
     }
 
-    if (!this.wasOnGround && onGround) {
-      this._playLandSquash()
-    }
-
+    if (!this.wasOnGround && onGround) this._playLandSquash()
     this.wasOnGround = onGround
     this._updateEnemies()
   }
 
-  // --- level transition ---
+  // --- timer ---
+
+  _startTimer() {
+    if (this.timerEvent) this.timerEvent.remove()
+    this.timerEvent = this.time.addEvent({
+      delay: 1000,
+      repeat: LEVEL_TIME - 1,
+      callback: () => {
+        if (this.transitioning) return
+        this.timeLeft = Math.max(0, this.timeLeft - 1)
+        this._updateTimerText()
+        if (this.timeLeft === 0) this._gameOver('Time up!')
+      },
+    })
+  }
+
+  // --- level transition / game over ---
 
   _reachGoal() {
     if (this.transitioning) return
     this.transitioning = true
+    if (this.timerEvent) this.timerEvent.remove()
 
     this.player.body.setVelocity(0, 0)
 
-    const next = this.cfg.nextLevel
-    const nextIndex = next !== null && LEVELS[next] !== undefined ? next : null
-    const unlocked = nextIndex !== null && !this.unlockedLevels.includes(nextIndex)
+    const next       = this.cfg.nextLevel
+    const nextIndex  = next !== null && LEVELS[next] !== undefined ? next : null
+    const unlocked   = nextIndex !== null && !this.unlockedLevels.includes(nextIndex)
       ? [...this.unlockedLevels, nextIndex]
       : this.unlockedLevels
 
-    saveProgress(
-      nextIndex ?? this.levelIndex,
-      this.score,
-      unlocked,
-    )
+    saveProgress(nextIndex ?? this.levelIndex, this.score, unlocked)
 
     this.cameras.main.fadeOut(600, 0, 0, 0)
     this.cameras.main.once('camerafadeoutcomplete', () => {
       if (nextIndex !== null) {
-        this.scene.restart({ levelIndex: nextIndex, score: this.score, unlockedLevels: unlocked })
+        this.scene.restart({
+          levelIndex: nextIndex,
+          score: this.score,
+          unlockedLevels: unlocked,
+          hp: this.hp,
+          coinsCollected: this.coinsCollected,
+        })
       } else {
         this.scene.start('GameScene', { won: true, score: this.score })
       }
+    })
+  }
+
+  _gameOver(reason) {
+    if (this.transitioning) return
+    this.transitioning = true
+    if (this.timerEvent) this.timerEvent.remove()
+    this.player.body.setVelocity(0, 0)
+
+    this.add.text(
+      this.scale.width / 2,
+      this.scale.height / 2,
+      reason || 'Game Over',
+      { fontSize: '36px', fontFamily: 'Arial Black', color: '#ff0000', stroke: '#000', strokeThickness: 5 }
+    ).setOrigin(0.5).setScrollFactor(0).setDepth(20)
+
+    this.cameras.main.fadeOut(1500, 0, 0, 0)
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      this.scene.start('GameScene', { gameOver: true, score: this.score })
     })
   }
 
@@ -110,13 +148,9 @@ export default class PlayScene extends Phaser.Scene {
     this.enemyList.forEach(rect => {
       if (!rect.active || !rect.alive) return
       const vx = rect.body.velocity.x
-      if (rect.x <= rect.patrolLeft || rect.body.blocked.left) {
-        rect.body.setVelocityX(ENEMY_SPEED)
-      } else if (rect.x >= rect.patrolRight || rect.body.blocked.right) {
-        rect.body.setVelocityX(-ENEMY_SPEED)
-      } else if (vx === 0) {
-        rect.body.setVelocityX(ENEMY_SPEED)
-      }
+      if      (rect.x <= rect.patrolLeft  || rect.body.blocked.left)  rect.body.setVelocityX(ENEMY_SPEED)
+      else if (rect.x >= rect.patrolRight || rect.body.blocked.right) rect.body.setVelocityX(-ENEMY_SPEED)
+      else if (vx === 0)                                               rect.body.setVelocityX(ENEMY_SPEED)
     })
   }
 
@@ -126,12 +160,8 @@ export default class PlayScene extends Phaser.Scene {
     rect.body.setVelocity(0, 0)
     rect.body.setAllowGravity(false)
     this.tweens.add({
-      targets: rect,
-      scaleY: 0.1,
-      y: rect.y + 14,
-      duration: 150,
-      ease: 'Power2',
-      onComplete: () => { rect.destroy() },
+      targets: rect, scaleY: 0.1, y: rect.y + 14, duration: 150, ease: 'Power2',
+      onComplete: () => rect.destroy(),
     })
   }
 
@@ -148,18 +178,22 @@ export default class PlayScene extends Phaser.Scene {
 
     if (this.invincible) return
     this.invincible = true
+
+    this.hp = Math.max(0, this.hp - 1)
+    this._updateHealthBar()
+
+    if (this.hp === 0) {
+      this._gameOver('Game Over!')
+      return
+    }
+
     const knockDir = player.x <= enemyRect.x ? -1 : 1
     player.body.setVelocity(knockDir * KNOCKBACK_X, KNOCKBACK_Y)
+
     this.tweens.add({
-      targets: player,
-      alpha: 0.2,
-      duration: 100,
-      yoyo: true,
-      repeat: INVINCIBILITY_REPEAT,
-      onComplete: () => {
-        player.alpha = 1
-        this.invincible = false
-      },
+      targets: player, alpha: 0.2, duration: 80, yoyo: true,
+      repeat: Math.floor(INVINCIBILITY_MS / 160),
+      onComplete: () => { player.alpha = 1; this.invincible = false },
     })
   }
 
@@ -168,18 +202,14 @@ export default class PlayScene extends Phaser.Scene {
     coin.collected = true
     coin.body.enable = false
 
-    this.score += 1
-    this.scoreText.setText(`SCORE: ${this.score}`)
+    this.coinsCollected += 1
+    this.score += COIN_POINTS
+    this._updateScoreText()
 
     this.tweens.add({
-      targets: coin,
-      y: coin.y - 32,
-      alpha: 0,
-      scaleX: 1.5,
-      scaleY: 1.5,
-      duration: 300,
-      ease: 'Power2',
-      onComplete: () => { coin.destroy() },
+      targets: coin, y: coin.y - 32, alpha: 0, scaleX: 1.5, scaleY: 1.5,
+      duration: 300, ease: 'Power2',
+      onComplete: () => coin.destroy(),
     })
   }
 
@@ -189,24 +219,83 @@ export default class PlayScene extends Phaser.Scene {
     if (this.jumpAnimating) return
     this.jumpAnimating = true
     this.tweens.add({
-      targets: this.player,
-      scaleX: 0.75,
-      scaleY: 1.3,
-      duration: 80,
-      yoyo: true,
+      targets: this.player, scaleX: 0.75, scaleY: 1.3, duration: 80, yoyo: true,
       onComplete: () => { this.jumpAnimating = false },
     })
   }
 
   _playLandSquash() {
     this.tweens.add({
-      targets: this.player,
-      scaleX: 1.3,
-      scaleY: 0.7,
-      duration: 60,
-      yoyo: true,
-      ease: 'Sine.easeOut',
+      targets: this.player, scaleX: 1.3, scaleY: 0.7, duration: 60, yoyo: true, ease: 'Sine.easeOut',
     })
+  }
+
+  // --- HUD ---
+
+  _createHUD(width) {
+    const BAR_H = 38
+
+    const bg = this.add.graphics()
+    bg.fillStyle(0x000000, 0.55)
+    bg.fillRect(0, 0, width, BAR_H)
+    bg.setScrollFactor(0).setDepth(10)
+
+    // Health rectangles
+    this.heartRects = []
+    for (let i = 0; i < MAX_HP; i++) {
+      const r = this.add.rectangle(14 + i * 22, 19, 16, 16, 0xe52521)
+      r.setScrollFactor(0).setDepth(11)
+      this.heartRects.push(r)
+    }
+
+    // Coins
+    this.coinsText = this.add
+      .text(90, 10, `● ${this.coinsCollected}`, {
+        fontSize: '16px', fontFamily: 'Arial Black', color: '#ffd700',
+        stroke: '#000', strokeThickness: 3,
+      })
+      .setScrollFactor(0).setDepth(11)
+
+    // Level name (centre)
+    this.add
+      .text(width / 2, 10, this.cfg.name, {
+        fontSize: '15px', fontFamily: 'Arial', color: '#ffffff',
+        stroke: '#000', strokeThickness: 2,
+      })
+      .setOrigin(0.5, 0).setScrollFactor(0).setDepth(11)
+
+    // Score
+    this.scoreText = this.add
+      .text(width - 160, 10, `SCORE: ${this.score}`, {
+        fontSize: '15px', fontFamily: 'Arial Black', color: '#ffd700',
+        stroke: '#000', strokeThickness: 3,
+      })
+      .setScrollFactor(0).setDepth(11)
+
+    // Timer
+    this.timerText = this.add
+      .text(width - 10, 10, `TIME: ${this.timeLeft}`, {
+        fontSize: '15px', fontFamily: 'Arial Black', color: '#ffffff',
+        stroke: '#000', strokeThickness: 3,
+      })
+      .setOrigin(1, 0).setScrollFactor(0).setDepth(11)
+  }
+
+  _updateHealthBar() {
+    this.heartRects.forEach((r, i) => {
+      r.setFillStyle(i < this.hp ? 0xe52521 : 0x444444)
+    })
+  }
+
+  _updateScoreText() {
+    this.scoreText.setText(`SCORE: ${this.score}`)
+    this.coinsText.setText(`● ${this.coinsCollected}`)
+  }
+
+  _updateTimerText() {
+    const urgent = this.timeLeft <= 60
+    this.timerText.setText(`TIME: ${this.timeLeft}`)
+    this.timerText.setColor(urgent ? '#ff4444' : '#ffffff')
   }
 
   // --- scene builders ---
@@ -238,13 +327,13 @@ export default class PlayScene extends Phaser.Scene {
 
   _createEnemies(width, height) {
     this.enemyList = []
-    this.enemies = this.physics.add.group()
+    this.enemies   = this.physics.add.group()
     this.cfg.enemies.forEach(({ xFrac, fromBottom, leftFrac, rightFrac }) => {
       const rect = this.add.rectangle(width * xFrac, height - fromBottom, 32, 32, 0x9b59b6)
       this.physics.add.existing(rect, false)
       rect.body.setCollideWorldBounds(true)
       rect.body.setVelocityX(ENEMY_SPEED)
-      rect.patrolLeft = width * leftFrac
+      rect.patrolLeft  = width * leftFrac
       rect.patrolRight = width * rightFrac
       rect.alive = true
       this.enemies.add(rect)
@@ -261,9 +350,7 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   _createPlayer(width, height) {
-    const spawnX = width * this.cfg.spawn.xFrac
-    const spawnY = height - 80
-    const playerRect = this.add.rectangle(spawnX, spawnY, 32, 48, 0xe52521)
+    const playerRect = this.add.rectangle(width * this.cfg.spawn.xFrac, height - 80, 32, 48, 0xe52521)
     this.physics.add.existing(playerRect, false)
     this.player = playerRect
     this.player.body.setCollideWorldBounds(true)
@@ -274,38 +361,15 @@ export default class PlayScene extends Phaser.Scene {
     this.physics.add.collider(this.enemies, this.platforms)
     this.physics.add.collider(this.player, this.enemies, this._onHitEnemy, null, this)
     this.physics.add.overlap(this.player, this.coins, this._onCollectCoin, null, this)
-    this.physics.add.overlap(this.player, this.goal, this._reachGoal, null, this)
+    this.physics.add.overlap(this.player, this.goal,  this._reachGoal,    null, this)
   }
 
   _createControls() {
     this.cursors = this.input.keyboard.createCursorKeys()
-    this.wasd = this.input.keyboard.addKeys({
+    this.wasd    = this.input.keyboard.addKeys({
       left: Phaser.Input.Keyboard.KeyCodes.A,
       right: Phaser.Input.Keyboard.KeyCodes.D,
-      up: Phaser.Input.Keyboard.KeyCodes.W,
+      up:   Phaser.Input.Keyboard.KeyCodes.W,
     })
-  }
-
-  _createHUD(width) {
-    this.add
-      .text(10, 10, `${this.cfg.name}  |  Arrows/WASD move  |  UP/SPACE jump  |  Stomp enemies!`, {
-        fontSize: '13px',
-        fontFamily: 'Arial',
-        color: '#ffffff',
-        stroke: '#000000',
-        strokeThickness: 3,
-      })
-      .setScrollFactor(0)
-
-    this.scoreText = this.add
-      .text(width - 10, 10, `SCORE: ${this.score}`, {
-        fontSize: '18px',
-        fontFamily: 'Arial Black, Arial',
-        color: '#ffd700',
-        stroke: '#000000',
-        strokeThickness: 4,
-      })
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
   }
 }
