@@ -14,6 +14,7 @@ export default class PlayScene extends Phaser.Scene {
     this.wasOnGround = true
     this.jumpAnimating = false
     this.invincible = false
+    this.score = 0
   }
 
   create() {
@@ -21,6 +22,7 @@ export default class PlayScene extends Phaser.Scene {
 
     this._createGround(width, height)
     this._createPlatforms(width, height)
+    this._createCoins(width, height)
     this._createEnemies(width, height)
     this._createPlayer(height)
     this._setupCollisions()
@@ -89,19 +91,17 @@ export default class PlayScene extends Phaser.Scene {
     })
   }
 
-  // --- collision callbacks ---
+  // --- collision / overlap callbacks ---
 
   _onHitEnemy(player, enemyRect) {
     if (!enemyRect.alive) return
 
-    // Stomp: player center is above enemy center and moving downward
     if (player.y < enemyRect.y && player.body.velocity.y >= 0) {
       this._killEnemy(enemyRect)
       player.body.setVelocityY(STOMP_BOUNCE)
       return
     }
 
-    // Side hit
     if (this.invincible) return
     this.invincible = true
     const knockDir = player.x <= enemyRect.x ? -1 : 1
@@ -116,6 +116,26 @@ export default class PlayScene extends Phaser.Scene {
         player.alpha = 1
         this.invincible = false
       },
+    })
+  }
+
+  _onCollectCoin(player, coin) {
+    if (coin.collected) return
+    coin.collected = true
+    coin.body.enable = false
+
+    this.score += 1
+    this.scoreText.setText(`SCORE: ${this.score}`)
+
+    this.tweens.add({
+      targets: coin,
+      y: coin.y - 32,
+      alpha: 0,
+      scaleX: 1.5,
+      scaleY: 1.5,
+      duration: 300,
+      ease: 'Power2',
+      onComplete: () => { coin.destroy() },
     })
   }
 
@@ -167,6 +187,30 @@ export default class PlayScene extends Phaser.Scene {
     })
   }
 
+  _createCoins(width, height) {
+    this.coins = this.physics.add.staticGroup()
+
+    const positions = [
+      { x: width * 0.15, y: height - 80  },
+      { x: width * 0.20, y: height - 80  },
+      { x: width * 0.25, y: height - 165 },
+      { x: width * 0.30, y: height - 165 },
+      { x: width * 0.48, y: height - 248 },
+      { x: width * 0.55, y: height - 248 },
+      { x: width * 0.62, y: height - 248 },
+      { x: width * 0.75, y: height - 80  },
+      { x: width * 0.80, y: height - 188 },
+      { x: width * 0.88, y: height - 80  },
+    ]
+
+    positions.forEach(({ x, y }) => {
+      const coin = this.add.rectangle(x, y, 14, 14, 0xffd700)
+      this.physics.add.existing(coin, true)
+      coin.collected = false
+      this.coins.add(coin)
+    })
+  }
+
   _createEnemies(width, height) {
     this.enemyList = []
     this.enemies = this.physics.add.group()
@@ -201,6 +245,7 @@ export default class PlayScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.platforms)
     this.physics.add.collider(this.enemies, this.platforms)
     this.physics.add.collider(this.player, this.enemies, this._onHitEnemy, null, this)
+    this.physics.add.overlap(this.player, this.coins, this._onCollectCoin, null, this)
   }
 
   _createControls() {
@@ -214,13 +259,24 @@ export default class PlayScene extends Phaser.Scene {
 
   _createHUD() {
     this.add
-      .text(10, 10, 'Arrow keys / WASD to move  |  UP / W / SPACE to jump  |  Stomp enemies!', {
+      .text(10, 10, 'Arrow keys / WASD  |  UP / SPACE to jump  |  Stomp enemies!', {
         fontSize: '13px',
         fontFamily: 'Arial',
         color: '#ffffff',
         stroke: '#000000',
         strokeThickness: 3,
       })
+      .setScrollFactor(0)
+
+    this.scoreText = this.add
+      .text(this.scale.width - 10, 10, 'SCORE: 0', {
+        fontSize: '18px',
+        fontFamily: 'Arial Black, Arial',
+        color: '#ffd700',
+        stroke: '#000000',
+        strokeThickness: 4,
+      })
+      .setOrigin(1, 0)
       .setScrollFactor(0)
   }
 }
