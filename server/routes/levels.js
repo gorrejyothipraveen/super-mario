@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { adminAuth } from '../middleware/adminAuth.js'
+import { sanitizeBody } from '../middleware/sanitize.js'
 import {
   listLevels, getLevel, createLevelHandler,
   updateLevelHandler, publishLevelHandler, deleteLevelHandler,
@@ -7,11 +8,11 @@ import {
 
 const router = Router()
 
-router.get('/',             listLevels)                          // public (filters unpublished)
-router.get('/:id',          getLevel)                            // public
-router.post('/',            adminAuth, createLevelHandler)        // admin
-router.put('/:id',          adminAuth, updateLevelHandler)        // admin
-router.patch('/:id/publish', adminAuth, publishLevelHandler)      // admin
-router.delete('/:id',       adminAuth, deleteLevelHandler)        // admin
+router.get('/',              listLevels)
+router.get('/:id',           getLevel)
+router.post('/',             adminAuth, sanitizeBody(['name', 'background']), createLevelHandler)
+router.put('/:id',           adminAuth, sanitizeBody(['name', 'background']), updateLevelHandler)
+router.patch('/:id/publish', adminAuth, publishLevelHandler)
+router.delete('/:id',        adminAuth, deleteLevelHandler)
 
 export default router
