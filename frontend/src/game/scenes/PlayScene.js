@@ -11,7 +11,6 @@ export default class PlayScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale
 
-    this._createTextures(width)
     this._createGround(width, height)
     this._createPlayer(height)
     this._createControls()
@@ -29,42 +28,29 @@ export default class PlayScene extends Phaser.Scene {
       onGround
 
     if (left) {
-      this.player.setVelocityX(-PLAYER_SPEED)
-      this.player.setFlipX(true)
+      this.player.body.setVelocityX(-PLAYER_SPEED)
     } else if (right) {
-      this.player.setVelocityX(PLAYER_SPEED)
-      this.player.setFlipX(false)
+      this.player.body.setVelocityX(PLAYER_SPEED)
     } else {
-      this.player.setVelocityX(0)
+      this.player.body.setVelocityX(0)
     }
 
     if (jump) {
-      this.player.setVelocityY(JUMP_VELOCITY)
+      this.player.body.setVelocityY(JUMP_VELOCITY)
     }
   }
 
-  _createTextures(width) {
-    const playerGfx = this.make.graphics({ add: false })
-    playerGfx.fillStyle(0xe52521)
-    playerGfx.fillRect(0, 0, 32, 48)
-    playerGfx.generateTexture('player', 32, 48)
-    playerGfx.destroy()
-
-    const groundGfx = this.make.graphics({ add: false })
-    groundGfx.fillStyle(0x8b4513)
-    groundGfx.fillRect(0, 0, width, 32)
-    groundGfx.generateTexture('ground', width, 32)
-    groundGfx.destroy()
-  }
-
   _createGround(width, height) {
-    this.ground = this.physics.add.staticGroup()
-    this.ground.create(width / 2, height - 16, 'ground')
+    const groundRect = this.add.rectangle(width / 2, height - 16, width, 32, 0x8b4513)
+    this.physics.add.existing(groundRect, true)
+    this.ground = groundRect
   }
 
   _createPlayer(height) {
-    this.player = this.physics.add.sprite(100, height - 80, 'player')
-    this.player.setCollideWorldBounds(true)
+    const playerRect = this.add.rectangle(100, height - 80, 32, 48, 0xe52521)
+    this.physics.add.existing(playerRect, false)
+    this.player = playerRect
+    this.player.body.setCollideWorldBounds(true)
     this.physics.add.collider(this.player, this.ground)
   }
 
