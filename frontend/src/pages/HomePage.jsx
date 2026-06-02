@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { loadProgress, clearProgress } from '../game/services/saveService.js'
+import { setVolume, getVolume } from '../game/services/soundManager.js'
 
 export default function HomePage() {
   const navigate = useNavigate()
@@ -10,6 +11,7 @@ export default function HomePage() {
     () => localStorage.getItem('smario_username') || 'guest'
   )
   const [nameInput, setNameInput]   = useState(playerName)
+  const [volume, setVol]            = useState(() => getVolume())
   const [exitMsg, setExitMsg]       = useState(false)
 
   useEffect(() => {
@@ -29,6 +31,7 @@ export default function HomePage() {
     const name = nameInput.trim() || 'guest'
     localStorage.setItem('smario_username', name)
     setPlayerName(name)
+    setVolume(volume)
     setSettings(false)
   }
 
@@ -77,6 +80,17 @@ export default function HomePage() {
             onChange={e => setNameInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && saveSettings()}
             autoFocus
+          />
+          <label style={{ ...s.label, marginTop: 14 }} htmlFor="volume">
+            Volume — {Math.round(volume * 100)}%
+          </label>
+          <input
+            id="volume"
+            type="range"
+            min="0" max="1" step="0.05"
+            value={volume}
+            style={{ width: '100%', accentColor: '#ffd700', cursor: 'pointer' }}
+            onChange={e => { const v = parseFloat(e.target.value); setVol(v); setVolume(v) }}
           />
           <div style={s.panelActions}>
             <button style={{ ...s.btn, ...s.btnPrimary }} onClick={saveSettings}>Save</button>

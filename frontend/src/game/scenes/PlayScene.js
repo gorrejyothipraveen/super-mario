@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { LEVELS } from '../levels/index.js'
 import { saveProgress } from '../services/saveService.js'
+import { playJump, playCoin, playEnemyStomp, playPlayerHit, playGameOver } from '../services/soundManager.js'
 
 const PLAYER_SPEED      = 200
 const JUMP_VELOCITY     = -450
@@ -67,6 +68,7 @@ export default class PlayScene extends Phaser.Scene {
     if (jumpPressed && onGround) {
       this.player.body.setVelocityY(JUMP_VELOCITY)
       this._playJumpStretch()
+      playJump()
     }
 
     if (!this.wasOnGround && onGround) this._playLandSquash()
@@ -85,7 +87,7 @@ export default class PlayScene extends Phaser.Scene {
         if (this.transitioning) return
         this.timeLeft = Math.max(0, this.timeLeft - 1)
         this._updateTimerText()
-        if (this.timeLeft === 0) this._gameOver('Time up!')
+        if (this.timeLeft === 0) { playGameOver(); this._gameOver('Time up!') }
       },
     })
   }
@@ -173,6 +175,7 @@ export default class PlayScene extends Phaser.Scene {
     if (player.y < enemyRect.y && player.body.velocity.y >= 0) {
       this._killEnemy(enemyRect)
       player.body.setVelocityY(STOMP_BOUNCE)
+      playEnemyStomp()
       return
     }
 
@@ -181,8 +184,10 @@ export default class PlayScene extends Phaser.Scene {
 
     this.hp = Math.max(0, this.hp - 1)
     this._updateHealthBar()
+    playPlayerHit()
 
     if (this.hp === 0) {
+      playGameOver()
       this._gameOver('Game Over!')
       return
     }
@@ -205,6 +210,7 @@ export default class PlayScene extends Phaser.Scene {
     this.coinsCollected += 1
     this.score += COIN_POINTS
     this._updateScoreText()
+    playCoin()
 
     this.tweens.add({
       targets: coin, y: coin.y - 32, alpha: 0, scaleX: 1.5, scaleY: 1.5,
