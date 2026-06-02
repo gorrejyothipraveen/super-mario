@@ -264,18 +264,18 @@ export default class PlayScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0).setScrollFactor(0).setDepth(11)
 
-    // Score
-    this.scoreText = this.add
-      .text(width - 160, 10, `SCORE: ${this.score}`, {
-        fontSize: '15px', fontFamily: 'Arial Black', color: '#ffd700',
-        stroke: '#000', strokeThickness: 3,
-      })
-      .setScrollFactor(0).setDepth(11)
-
-    // Timer
+    // Timer (far right)
     this.timerText = this.add
       .text(width - 10, 10, `TIME: ${this.timeLeft}`, {
         fontSize: '15px', fontFamily: 'Arial Black', color: '#ffffff',
+        stroke: '#000', strokeThickness: 3,
+      })
+      .setOrigin(1, 0).setScrollFactor(0).setDepth(11)
+
+    // Score (to the left of timer)
+    this.scoreText = this.add
+      .text(width - 115, 10, `SCORE: ${this.score}`, {
+        fontSize: '15px', fontFamily: 'Arial Black', color: '#ffd700',
         stroke: '#000', strokeThickness: 3,
       })
       .setOrigin(1, 0).setScrollFactor(0).setDepth(11)
