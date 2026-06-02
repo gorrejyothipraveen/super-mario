@@ -35,8 +35,9 @@ export default class PlayScene extends Phaser.Scene {
     this.invincible     = false
     this.transitioning  = false
     this.playerDir      = 1
-    // Endless mode
-    this.endless        = data.endless ?? false
+    // Endless mode — also check levelConfig.endless as a fallback so data can't
+    // accidentally revert to normal mode if scene.restart drops extra keys
+    this.endless        = data.endless ?? data.levelConfig?.endless ?? false
     this.wave           = data.wave ?? 1
     this.wavesCompleted = data.wavesCompleted ?? 0
   }
@@ -169,13 +170,15 @@ export default class PlayScene extends Phaser.Scene {
 
       this.cameras.main.fadeOut(1200, 0, 0, 0)
       this.cameras.main.once('camerafadeoutcomplete', () => {
-        this.scene.restart({
-          endless: true,
-          wave: nextWave,
+        // Use scene.start instead of scene.restart — restart can silently drop
+        // extra data keys in Phaser 4, which would lose the `endless` flag
+        this.scene.start('PlayScene', {
+          endless:        true,
+          wave:           nextWave,
           wavesCompleted: this.wavesCompleted + 1,
-          levelConfig: generateEndlessLevel(nextWave),
-          score: this.score,
-          hp: this.hp,
+          levelConfig:    generateEndlessLevel(nextWave),
+          score:          this.score,
+          hp:             this.hp,
           coinsCollected: this.coinsCollected,
         })
       })
@@ -567,7 +570,7 @@ export default class PlayScene extends Phaser.Scene {
       rect.setAlpha(0)
       this.physics.add.existing(rect, false)
       rect.body.setCollideWorldBounds(true)
-      rect.body.setVelocityX(ENEMY_SPEED)
+      rect.body.setVelocityX(this.effectiveEnemySpeed)
       rect.patrolLeft  = width * leftFrac
       rect.patrolRight = width * rightFrac
       rect.alive = true
