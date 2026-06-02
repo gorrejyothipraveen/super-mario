@@ -7,6 +7,7 @@ import { createProxyMiddleware } from 'http-proxy-middleware'
 import healthRouter from './routes/health.js'
 import scoresRouter from './routes/scores.js'
 import savesRouter from './routes/saves.js'
+import levelsRouter from './routes/levels.js'
 import { notFound, errorHandler } from './middleware/errorHandler.js'
 import config from './config/index.js'
 
@@ -21,6 +22,7 @@ app.use(express.urlencoded({ extended: false }))
 app.use('/api', healthRouter)
 app.use('/api/scores', scoresRouter)
 app.use('/api/saves', savesRouter)
+app.use('/api/levels', levelsRouter)
 
 if (config.nodeEnv === 'production') {
   const distPath = path.join(__dirname, '../frontend/dist')

@@ -26,6 +26,16 @@ db.exec(`
     unlocked_levels TEXT    NOT NULL DEFAULT '[0]',
     updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS levels (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT    NOT NULL,
+    background  TEXT    NOT NULL DEFAULT '#5c94fc',
+    config_json TEXT    NOT NULL DEFAULT '{}',
+    published   INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
 `)
 
 export default db
