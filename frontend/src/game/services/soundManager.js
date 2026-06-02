@@ -36,28 +36,31 @@ function tone({ type = 'sine', freq, endFreq, duration, gainVal }) {
 }
 
 export function playJump() {
-  tone({ type: 'square', freq: 220, endFreq: 660, duration: 0.14 })
+  tone({ type: 'square', freq: 300, endFreq: 620, duration: 0.10 })
 }
 
 export function playCoin() {
-  tone({ type: 'sine', freq: 988,  endFreq: 1480, duration: 0.08 })
-  setTimeout(() =>
-    tone({ type: 'sine', freq: 1480, duration: 0.12 }), 80)
+  tone({ type: 'sine', freq: 1318, duration: 0.05 })
+  setTimeout(() => tone({ type: 'sine', freq: 1760, duration: 0.10 }), 55)
 }
 
 export function playEnemyStomp() {
-  tone({ type: 'square', freq: 180, endFreq: 55,  duration: 0.18 })
+  tone({ type: 'square', freq: 200, endFreq: 60, duration: 0.15 })
 }
 
 export function playPlayerHit() {
-  tone({ type: 'sawtooth', freq: 320, endFreq: 90, duration: 0.28 })
+  tone({ type: 'sawtooth', freq: 440, endFreq: 110, duration: 0.30 })
 }
 
 export function playGameOver() {
-  const delays = [0, 180, 360, 540]
-  const freqs  = [330, 262, 220, 165]
-  delays.forEach((d, i) =>
-    setTimeout(() => tone({ type: 'square', freq: freqs[i], duration: 0.22 }), d)
+  const steps = [
+    { d: 0,   f: 330, dur: 0.25 },
+    { d: 270, f: 262, dur: 0.25 },
+    { d: 540, f: 220, dur: 0.25 },
+    { d: 810, f: 165, dur: 0.60 },
+  ]
+  steps.forEach(({ d, f, dur }) =>
+    setTimeout(() => tone({ type: 'square', freq: f, duration: dur }), d)
   )
 }
 

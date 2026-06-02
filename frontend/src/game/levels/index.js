@@ -8,6 +8,12 @@ const level1 = {
     { xFrac: 0.55, fromBottom: 210, w: 160 },
     { xFrac: 0.80, fromBottom: 150, w: 120 },
   ],
+  questionBlocks: [
+    { xFrac: 0.30, fromBottom: 210 },
+    { xFrac: 0.50, fromBottom: 120 },
+    { xFrac: 0.55, fromBottom: 290 },
+    { xFrac: 0.62, fromBottom: 290 },
+  ],
   coins: [
     { xFrac: 0.15, fromBottom: 80  },
     { xFrac: 0.20, fromBottom: 80  },
