@@ -1,7 +1,7 @@
+import { useLocation } from 'react-router-dom'
 import PhaserGame from '../game/PhaserGame.jsx'
 
-function GamePage() {
-  return <PhaserGame />
+export default function GamePage() {
+  const { state } = useLocation()
+  return <PhaserGame initialSave={state?.save ?? null} />
 }
-
-export default GamePage
