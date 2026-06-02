@@ -12,8 +12,9 @@ const INVINCIBILITY_MS = 1500
 const ENEMY_SPEED      = 80
 const STOMP_BOUNCE     = -280
 const MAX_HP           = 3
-const LEVEL_TIME       = 300
-const COIN_POINTS      = 10
+const LEVEL_TIME       = 400
+const COIN_POINTS      = 200
+const STOMP_POINTS     = 100
 
 export default class PlayScene extends Phaser.Scene {
   constructor() {
@@ -31,6 +32,7 @@ export default class PlayScene extends Phaser.Scene {
     this.jumpAnimating  = false
     this.invincible     = false
     this.transitioning  = false
+    this.playerDir      = 1
   }
 
   create() {
@@ -77,23 +79,26 @@ export default class PlayScene extends Phaser.Scene {
     if (!this.wasOnGround && onGround) this._playLandSquash()
     this.wasOnGround = onGround
 
-    // Keep blue overalls aligned with the physics body
-    if (this.playerOveralls) {
-      this.playerOveralls.setPosition(this.player.x, this.player.y + 12)
-      this.playerOveralls.setScale(this.player.scaleX, this.player.scaleY)
+    // Sync Mario graphic — position + horizontal flip for direction
+    if (this.playerGfx) {
+      this.playerGfx.setPosition(this.player.x, this.player.y)
+      const vx = this.player.body.velocity.x
+      if      (vx > 0) this.playerDir = 1
+      else if (vx < 0) this.playerDir = -1
+      this.playerGfx.scaleX = this.playerDir
     }
 
     this._updateEnemies()
   }
 
-  // --- background ---
+  // --- background (sky clouds + hills, overworld only) ---
 
   _createBackground(width, height) {
-    if (this.cfg.background === '#1a1a2e') return // cave level — skip daytime decorations
+    if (this.cfg.background === '#1a1a2e') return
 
     const g = this.add.graphics().setDepth(0)
 
-    // Clouds
+    // White fluffy clouds
     const cloudDefs = [
       { x: width * 0.07, y: height * 0.12 },
       { x: width * 0.31, y: height * 0.08 },
@@ -108,7 +113,7 @@ export default class PlayScene extends Phaser.Scene {
       g.fillRect(x - 18,   y,      82, 18)
     })
 
-    // Rolling green hills in background
+    // Rolling green hills
     g.fillStyle(0x56a024, 1)
     ;[
       { x: width * 0.14, r: 55 },
@@ -139,7 +144,6 @@ export default class PlayScene extends Phaser.Scene {
     if (this.transitioning) return
     this.transitioning = true
     if (this.timerEvent) this.timerEvent.remove()
-
     this.player.body.setVelocity(0, 0)
 
     const next      = this.cfg.nextLevel
@@ -194,6 +198,12 @@ export default class PlayScene extends Phaser.Scene {
       if      (rect.x <= rect.patrolLeft  || rect.body.blocked.left)  rect.body.setVelocityX(ENEMY_SPEED)
       else if (rect.x >= rect.patrolRight || rect.body.blocked.right) rect.body.setVelocityX(-ENEMY_SPEED)
       else if (vx === 0)                                               rect.body.setVelocityX(ENEMY_SPEED)
+
+      // Sync dragon graphic
+      if (rect.gfx) {
+        rect.gfx.setPosition(rect.x, rect.y)
+        rect.gfx.scaleX = rect.body.velocity.x >= 0 ? 1 : -1
+      }
     })
   }
 
@@ -202,9 +212,13 @@ export default class PlayScene extends Phaser.Scene {
     rect.alive = false
     rect.body.setVelocity(0, 0)
     rect.body.setAllowGravity(false)
+    const visual = rect.gfx || rect
     this.tweens.add({
-      targets: rect, scaleY: 0.1, y: rect.y + 14, duration: 150, ease: 'Power2',
-      onComplete: () => rect.destroy(),
+      targets: visual, scaleY: 0.1, duration: 150, ease: 'Power2',
+      onComplete: () => {
+        if (rect.gfx) rect.gfx.destroy()
+        rect.destroy()
+      },
     })
   }
 
@@ -217,6 +231,8 @@ export default class PlayScene extends Phaser.Scene {
       this._killEnemy(enemyRect)
       player.body.setVelocityY(STOMP_BOUNCE)
       playEnemyStomp()
+      this.score += STOMP_POINTS
+      this._updateScoreText()
       return
     }
 
@@ -236,15 +252,11 @@ export default class PlayScene extends Phaser.Scene {
     const knockDir = player.x <= enemyRect.x ? -1 : 1
     player.body.setVelocity(knockDir * KNOCKBACK_X, KNOCKBACK_Y)
 
-    const flashTargets = this.playerOveralls ? [player, this.playerOveralls] : player
+    const flashTarget = this.playerGfx || player
     this.tweens.add({
-      targets: flashTargets, alpha: 0.2, duration: 80, yoyo: true,
+      targets: flashTarget, alpha: 0.2, duration: 80, yoyo: true,
       repeat: Math.floor(INVINCIBILITY_MS / 160),
-      onComplete: () => {
-        player.alpha = 1
-        if (this.playerOveralls) this.playerOveralls.alpha = 1
-        this.invincible = false
-      },
+      onComplete: () => { flashTarget.alpha = 1; this.invincible = false },
     })
   }
 
@@ -270,43 +282,125 @@ export default class PlayScene extends Phaser.Scene {
   _playJumpStretch() {
     if (this.jumpAnimating) return
     this.jumpAnimating = true
-    const targets = this.playerOveralls ? [this.player, this.playerOveralls] : this.player
+    const target = this.playerGfx || this.player
     this.tweens.add({
-      targets, scaleX: 0.75, scaleY: 1.3, duration: 80, yoyo: true,
+      targets: target, scaleY: 1.35, duration: 80, yoyo: true,
       onComplete: () => { this.jumpAnimating = false },
     })
   }
 
   _playLandSquash() {
-    const targets = this.playerOveralls ? [this.player, this.playerOveralls] : this.player
+    const target = this.playerGfx || this.player
     this.tweens.add({
-      targets, scaleX: 1.3, scaleY: 0.7, duration: 60, yoyo: true, ease: 'Sine.easeOut',
+      targets: target, scaleY: 0.65, duration: 60, yoyo: true, ease: 'Sine.easeOut',
     })
+  }
+
+  // --- pixel-art character drawers (called once at create time) ---
+
+  _drawMario(g) {
+    // Hat crown (red, narrow)
+    g.fillStyle(0xe52521, 1)
+    g.fillRect(-8, -30, 18, 8)
+    // Hat brim (red, wider)
+    g.fillRect(-12, -22, 26, 6)
+    // Left sideburn / hair (dark brown)
+    g.fillStyle(0x724800, 1)
+    g.fillRect(-14, -20, 5, 5)
+    // Face (skin tone)
+    g.fillStyle(0xfac68c, 1)
+    g.fillRect(-10, -16, 22, 12)
+    // Eye whites
+    g.fillStyle(0xffffff, 1)
+    g.fillRect(-8, -14, 5, 4)
+    g.fillRect(3, -14, 5, 4)
+    // Eye pupils
+    g.fillStyle(0x111111, 1)
+    g.fillRect(-7, -14, 3, 4)
+    g.fillRect(4, -14, 3, 4)
+    // Mustache (dark brown, wide)
+    g.fillStyle(0x724800, 1)
+    g.fillRect(-10, -6, 22, 5)
+    // Shirt (red)
+    g.fillStyle(0xe52521, 1)
+    g.fillRect(-12, -2, 26, 12)
+    // Overalls (blue)
+    g.fillStyle(0x3355cc, 1)
+    g.fillRect(-14, 8, 30, 16)
+    // Overall suspenders over shirt
+    g.fillStyle(0x4466ee, 1)
+    g.fillRect(-8, -2, 6, 10)
+    g.fillRect(2, -2, 6, 10)
+    // Left shoe (dark brown)
+    g.fillStyle(0x724800, 1)
+    g.fillRect(-14, 22, 12, 8)
+    // Right shoe
+    g.fillRect(2, 22, 12, 8)
+  }
+
+  _drawDragon(g) {
+    // Tail (dark blue, left side — mirrors when facing left)
+    g.fillStyle(0x3366aa, 1)
+    g.fillCircle(-14, 2, 6)
+    g.fillCircle(-19, 0, 4)
+    // Main body (blue)
+    g.fillStyle(0x4488cc, 1)
+    g.fillCircle(0, 4, 13)
+    // Neck stub
+    g.fillRect(-3, -12, 8, 10)
+    // Head (blue, right side)
+    g.fillCircle(6, -17, 11)
+    // Underbelly — body (lighter blue)
+    g.fillStyle(0x88aadd, 1)
+    g.fillCircle(0, 6, 8)
+    // Underbelly — head (lighter blue cheek)
+    g.fillCircle(7, -15, 7)
+    // Eye white
+    g.fillStyle(0xffffff, 1)
+    g.fillCircle(10, -19, 4)
+    // Eye pupil
+    g.fillStyle(0x111144, 1)
+    g.fillCircle(11, -20, 2)
+    // Horn — stepped pixel-art pyramid
+    g.fillStyle(0xf0a000, 1)
+    g.fillRect(3, -26, 6, 4)
+    g.fillRect(5, -30, 2, 4)
+    // Left foot (dark blue)
+    g.fillStyle(0x3366aa, 1)
+    g.fillRect(-10, 12, 9, 7)
+    // Right foot
+    g.fillRect(2, 12, 9, 7)
+    // Claws (tan)
+    g.fillStyle(0xccaa88, 1)
+    g.fillRect(-12, 17, 3, 4)
+    g.fillRect(-8,  17, 3, 4)
+    g.fillRect(2,   17, 3, 4)
+    g.fillRect(6,   17, 3, 4)
   }
 
   // --- HUD ---
 
   _createHUD(width) {
-    const BAR_H = 38
+    const BAR_H = 40
 
     // Background bar
     const bg = this.add.graphics()
-    bg.fillStyle(0x000000, 0.65)
+    bg.fillStyle(0x000000, 0.70)
     bg.fillRect(0, 0, width, BAR_H)
     bg.setScrollFactor(0).setDepth(10)
 
-    // HP hearts (left side)
+    // HP hearts (red squares, left side)
     this.heartRects = []
     for (let i = 0; i < MAX_HP; i++) {
-      const r = this.add.rectangle(14 + i * 22, 19, 16, 16, 0xe52521)
+      const r = this.add.rectangle(14 + i * 22, 20, 16, 16, 0xe52521)
       r.setScrollFactor(0).setDepth(11)
       this.heartRects.push(r)
     }
 
-    // Coin icon (gold circle) + counter
-    this.add.circle(88, 19, 7, 0xffd700).setScrollFactor(0).setDepth(11)
+    // Gold coin icon + count
+    this.add.circle(88, 20, 7, 0xffd700).setScrollFactor(0).setDepth(11)
     this.coinsText = this.add
-      .text(100, 10, `${this.coinsCollected}`, {
+      .text(100, 11, `${this.coinsCollected}`, {
         fontSize: '16px', fontFamily: 'Arial Black', color: '#ffd700',
         stroke: '#000', strokeThickness: 3,
       })
@@ -314,32 +408,32 @@ export default class PlayScene extends Phaser.Scene {
 
     // Level name (centre)
     this.add
-      .text(width / 2, 10, this.cfg.name, {
+      .text(width / 2, 11, this.cfg.name, {
         fontSize: '15px', fontFamily: 'Arial', color: '#ffffff',
         stroke: '#000', strokeThickness: 2,
       })
       .setOrigin(0.5, 0).setScrollFactor(0).setDepth(11)
 
-    // Score (right side, gold)
+    // TIME label (small, above number)
+    this.add
+      .text(width - 10, 4, 'TIME', {
+        fontSize: '9px', fontFamily: 'Arial', color: '#aaaaaa',
+      })
+      .setOrigin(1, 0).setScrollFactor(0).setDepth(11)
+
+    // Timer value (right side, prominent)
+    this.timerText = this.add
+      .text(width - 10, 14, `${this.timeLeft}`, {
+        fontSize: '16px', fontFamily: 'Arial Black', color: '#ffffff',
+        stroke: '#000', strokeThickness: 3,
+      })
+      .setOrigin(1, 0).setScrollFactor(0).setDepth(11)
+
+    // Score (left of timer)
     this.scoreText = this.add
-      .text(width - 10, 10, `${this.score}`, {
+      .text(width - 90, 11, `${this.score}`, {
         fontSize: '16px', fontFamily: 'Arial Black', color: '#ffd700',
         stroke: '#000', strokeThickness: 3,
-      })
-      .setOrigin(1, 0).setScrollFactor(0).setDepth(11)
-
-    // Timer (left of score)
-    this.timerText = this.add
-      .text(width - 80, 10, `${this.timeLeft}`, {
-        fontSize: '14px', fontFamily: 'Arial Black', color: '#ffffff',
-        stroke: '#000', strokeThickness: 3,
-      })
-      .setOrigin(1, 0).setScrollFactor(0).setDepth(11)
-
-    // Small "TIME" caption before timer
-    this.add
-      .text(width - 85, 10, 'TIME', {
-        fontSize: '10px', fontFamily: 'Arial', color: '#aaaaaa',
       })
       .setOrigin(1, 0).setScrollFactor(0).setDepth(11)
   }
@@ -356,7 +450,7 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   _updateTimerText() {
-    const urgent = this.timeLeft <= 60
+    const urgent = this.timeLeft <= 100
     this.timerText.setText(`${this.timeLeft}`)
     this.timerText.setColor(urgent ? '#ff4444' : '#ffffff')
   }
@@ -364,12 +458,11 @@ export default class PlayScene extends Phaser.Scene {
   // --- scene builders ---
 
   _createGround(width, height) {
-    // Physics body (brown dirt)
     const groundRect = this.add.rectangle(width / 2, height - 16, width, 32, 0x8b4513)
     this.physics.add.existing(groundRect, true)
     this.platforms = this.physics.add.staticGroup()
     this.platforms.add(groundRect)
-    // Green grass strip on top of dirt
+    // Green grass strip on top
     this.add.rectangle(width / 2, height - 30, width, 8, 0x56a024).setDepth(2)
   }
 
@@ -380,11 +473,9 @@ export default class PlayScene extends Phaser.Scene {
     this.cfg.platforms.forEach(({ xFrac, fromBottom, w }) => {
       const x = width * xFrac
       const y = height - fromBottom
-      // Brick orange-brown body
       const rect = this.add.rectangle(x, y, w, 20, 0xc84b0c)
       this.physics.add.existing(rect, true)
       this.platforms.add(rect)
-      // Mortar: vertical divisions and horizontal mid-line
       for (let bx = x - w / 2 + 32; bx < x + w / 2; bx += 32) {
         mortar.lineBetween(bx, y - 10, bx, y + 10)
       }
@@ -418,7 +509,6 @@ export default class PlayScene extends Phaser.Scene {
       this.physics.add.existing(coin, true)
       coin.collected = false
       this.coins.add(coin)
-      // Coin spin: scaleX oscillates to simulate 3-D rotation
       this.tweens.add({
         targets: coin, scaleX: 0.1, duration: 380,
         yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
@@ -430,14 +520,19 @@ export default class PlayScene extends Phaser.Scene {
     this.enemyList = []
     this.enemies   = this.physics.add.group()
     this.cfg.enemies.forEach(({ xFrac, fromBottom, leftFrac, rightFrac }) => {
-      // Blue Goomba-style enemy
-      const rect = this.add.rectangle(width * xFrac, height - fromBottom, 32, 32, 0x4488cc)
+      // Invisible physics body
+      const rect = this.add.rectangle(width * xFrac, height - fromBottom, 32, 32, 0x000000)
+      rect.setAlpha(0)
       this.physics.add.existing(rect, false)
       rect.body.setCollideWorldBounds(true)
       rect.body.setVelocityX(ENEMY_SPEED)
       rect.patrolLeft  = width * leftFrac
       rect.patrolRight = width * rightFrac
       rect.alive = true
+      // Dragon pixel-art overlay (drawn once, repositioned each frame)
+      rect.gfx = this.add.graphics().setDepth(5)
+      this._drawDragon(rect.gfx)
+      rect.gfx.setPosition(rect.x, rect.y)
       this.enemies.add(rect)
       this.enemyList.push(rect)
     })
@@ -451,22 +546,23 @@ export default class PlayScene extends Phaser.Scene {
     this.physics.add.existing(pole, true)
     this.goal = this.physics.add.staticGroup()
     this.goal.add(pole)
-    // Red flag at the top of the pole
+    // Red flag at top
     this.add.rectangle(x + 18, height - fromBottom + 14, 28, 20, 0xe52521).setDepth(2)
   }
 
   _createPlayer(width, height) {
     const x = width * this.cfg.spawn.xFrac
     const y = height - 80
-    // Red physics body (Mario's cap/shirt colour)
-    const playerRect = this.add.rectangle(x, y, 32, 48, 0xe52521)
+    // Invisible physics body
+    const playerRect = this.add.rectangle(x, y, 28, 44, 0x000000)
+    playerRect.setAlpha(0)
     this.physics.add.existing(playerRect, false)
     this.player = playerRect
     this.player.body.setCollideWorldBounds(true)
-    // Blue overalls layer — visual only, tracked in update()
-    this.playerOveralls = this.add
-      .rectangle(x, y + 12, 32, 22, 0x3355cc)
-      .setDepth(this.player.depth + 1)
+    // Mario pixel-art overlay (drawn once, repositioned each frame)
+    this.playerGfx = this.add.graphics().setDepth(5)
+    this._drawMario(this.playerGfx)
+    this.playerGfx.setPosition(x, y)
   }
 
   _setupCollisions() {
