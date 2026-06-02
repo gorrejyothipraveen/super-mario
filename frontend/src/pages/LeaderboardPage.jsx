@@ -1,29 +1,35 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import ErrorMessage from '../components/ErrorMessage.jsx'
 
 const MEDAL = ['🥇', '🥈', '🥉']
 
 function LeaderboardPage() {
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError]     = useState(null)
+  const [tick, setTick]       = useState(0)
+
+  const retry = () => setTick(t => t + 1)
 
   useEffect(() => {
+    let alive = true
     fetch('/api/scores/best?limit=20')
       .then(r => {
         if (!r.ok) throw new Error(`Server error ${r.status}`)
         return r.json()
       })
-      .then(data => { setEntries(data); setLoading(false) })
-      .catch(err => { setError(err.message); setLoading(false) })
-  }, [])
+      .then(data => { if (alive) { setEntries(data); setError(null); setLoading(false) } })
+      .catch(err => { if (alive) { setError(err.message); setLoading(false) } })
+    return () => { alive = false }
+  }, [tick])
 
   return (
     <div style={styles.page}>
       <h1 style={styles.title}>🏆 Global Leaderboard</h1>
 
       {loading && <p style={styles.info}>Loading...</p>}
-      {error   && <p style={styles.error}>Could not load scores: {error}</p>}
+      {error   && <ErrorMessage message={`Could not load scores: ${error}`} onRetry={retry} />}
 
       {!loading && !error && entries.length === 0 && (
         <p style={styles.info}>No scores yet — be the first!</p>
