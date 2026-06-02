@@ -29,7 +29,7 @@ export default class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
 
     this.input.keyboard.on('keydown-ENTER', () => {
-      this.scene.start('PlayScene')
+      this.scene.start('PlayScene', { levelIndex: 0, score: 0 })
     })
   }
 }

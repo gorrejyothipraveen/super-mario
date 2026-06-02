@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { LEVELS } from '../levels/index.js'
 
 const PLAYER_SPEED = 200
 const JUMP_VELOCITY = -450
@@ -11,26 +12,37 @@ const STOMP_BOUNCE = -280
 export default class PlayScene extends Phaser.Scene {
   constructor() {
     super({ key: 'PlayScene' })
+  }
+
+  init(data) {
+    this.levelIndex = data.levelIndex ?? 0
+    this.score = data.score ?? 0
     this.wasOnGround = true
     this.jumpAnimating = false
     this.invincible = false
-    this.score = 0
+    this.transitioning = false
   }
 
   create() {
     const { width, height } = this.scale
+    this.cfg = LEVELS[this.levelIndex]
+
+    this.cameras.main.setBackgroundColor(this.cfg.background)
 
     this._createGround(width, height)
     this._createPlatforms(width, height)
     this._createCoins(width, height)
     this._createEnemies(width, height)
-    this._createPlayer(height)
+    this._createGoal(width, height)
+    this._createPlayer(width, height)
     this._setupCollisions()
     this._createControls()
-    this._createHUD()
+    this._createHUD(width)
   }
 
   update() {
+    if (this.transitioning) return
+
     const onGround = this.player.body.blocked.down
     const left = this.cursors.left.isDown || this.wasd.left.isDown
     const right = this.cursors.right.isDown || this.wasd.right.isDown
@@ -58,6 +70,25 @@ export default class PlayScene extends Phaser.Scene {
 
     this.wasOnGround = onGround
     this._updateEnemies()
+  }
+
+  // --- level transition ---
+
+  _reachGoal() {
+    if (this.transitioning) return
+    this.transitioning = true
+
+    this.player.body.setVelocity(0, 0)
+
+    this.cameras.main.fadeOut(600, 0, 0, 0)
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      const next = this.cfg.nextLevel
+      if (next !== null && LEVELS[next] !== undefined) {
+        this.scene.restart({ levelIndex: next, score: this.score })
+      } else {
+        this.scene.start('GameScene', { won: true, score: this.score })
+      }
+    })
   }
 
   // --- enemy AI ---
@@ -175,13 +206,8 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   _createPlatforms(width, height) {
-    const defs = [
-      { x: width * 0.25, y: height - 130, w: 140 },
-      { x: width * 0.55, y: height - 210, w: 160 },
-      { x: width * 0.8,  y: height - 150, w: 120 },
-    ]
-    defs.forEach(({ x, y, w }) => {
-      const rect = this.add.rectangle(x, y, w, 20, 0x228b22)
+    this.cfg.platforms.forEach(({ xFrac, fromBottom, w }) => {
+      const rect = this.add.rectangle(width * xFrac, height - fromBottom, w, 20, 0x228b22)
       this.physics.add.existing(rect, true)
       this.platforms.add(rect)
     })
@@ -189,22 +215,8 @@ export default class PlayScene extends Phaser.Scene {
 
   _createCoins(width, height) {
     this.coins = this.physics.add.staticGroup()
-
-    const positions = [
-      { x: width * 0.15, y: height - 80  },
-      { x: width * 0.20, y: height - 80  },
-      { x: width * 0.25, y: height - 165 },
-      { x: width * 0.30, y: height - 165 },
-      { x: width * 0.48, y: height - 248 },
-      { x: width * 0.55, y: height - 248 },
-      { x: width * 0.62, y: height - 248 },
-      { x: width * 0.75, y: height - 80  },
-      { x: width * 0.80, y: height - 188 },
-      { x: width * 0.88, y: height - 80  },
-    ]
-
-    positions.forEach(({ x, y }) => {
-      const coin = this.add.rectangle(x, y, 14, 14, 0xffd700)
+    this.cfg.coins.forEach(({ xFrac, fromBottom }) => {
+      const coin = this.add.rectangle(width * xFrac, height - fromBottom, 14, 14, 0xffd700)
       this.physics.add.existing(coin, true)
       coin.collected = false
       this.coins.add(coin)
@@ -214,28 +226,31 @@ export default class PlayScene extends Phaser.Scene {
   _createEnemies(width, height) {
     this.enemyList = []
     this.enemies = this.physics.add.group()
-
-    const defs = [
-      { x: width * 0.42, y: height - 64,  left: width * 0.30, right: width * 0.54 },
-      { x: width * 0.68, y: height - 64,  left: width * 0.58, right: width * 0.82 },
-      { x: width * 0.55, y: height - 250, left: width * 0.45, right: width * 0.65 },
-    ]
-
-    defs.forEach(({ x, y, left, right }) => {
-      const rect = this.add.rectangle(x, y, 32, 32, 0x9b59b6)
+    this.cfg.enemies.forEach(({ xFrac, fromBottom, leftFrac, rightFrac }) => {
+      const rect = this.add.rectangle(width * xFrac, height - fromBottom, 32, 32, 0x9b59b6)
       this.physics.add.existing(rect, false)
       rect.body.setCollideWorldBounds(true)
       rect.body.setVelocityX(ENEMY_SPEED)
-      rect.patrolLeft = left
-      rect.patrolRight = right
+      rect.patrolLeft = width * leftFrac
+      rect.patrolRight = width * rightFrac
       rect.alive = true
       this.enemies.add(rect)
       this.enemyList.push(rect)
     })
   }
 
-  _createPlayer(height) {
-    const playerRect = this.add.rectangle(100, height - 80, 32, 48, 0xe52521)
+  _createGoal(width, height) {
+    const { xFrac, fromBottom } = this.cfg.goal
+    const pole = this.add.rectangle(width * xFrac, height - fromBottom, 12, fromBottom * 1.2, 0xffd700)
+    this.physics.add.existing(pole, true)
+    this.goal = this.physics.add.staticGroup()
+    this.goal.add(pole)
+  }
+
+  _createPlayer(width, height) {
+    const spawnX = width * this.cfg.spawn.xFrac
+    const spawnY = height - 80
+    const playerRect = this.add.rectangle(spawnX, spawnY, 32, 48, 0xe52521)
     this.physics.add.existing(playerRect, false)
     this.player = playerRect
     this.player.body.setCollideWorldBounds(true)
@@ -246,6 +261,7 @@ export default class PlayScene extends Phaser.Scene {
     this.physics.add.collider(this.enemies, this.platforms)
     this.physics.add.collider(this.player, this.enemies, this._onHitEnemy, null, this)
     this.physics.add.overlap(this.player, this.coins, this._onCollectCoin, null, this)
+    this.physics.add.overlap(this.player, this.goal, this._reachGoal, null, this)
   }
 
   _createControls() {
@@ -257,9 +273,9 @@ export default class PlayScene extends Phaser.Scene {
     })
   }
 
-  _createHUD() {
+  _createHUD(width) {
     this.add
-      .text(10, 10, 'Arrow keys / WASD  |  UP / SPACE to jump  |  Stomp enemies!', {
+      .text(10, 10, `${this.cfg.name}  |  Arrows/WASD move  |  UP/SPACE jump  |  Stomp enemies!`, {
         fontSize: '13px',
         fontFamily: 'Arial',
         color: '#ffffff',
@@ -269,7 +285,7 @@ export default class PlayScene extends Phaser.Scene {
       .setScrollFactor(0)
 
     this.scoreText = this.add
-      .text(this.scale.width - 10, 10, 'SCORE: 0', {
+      .text(width - 10, 10, `SCORE: ${this.score}`, {
         fontSize: '18px',
         fontFamily: 'Arial Black, Arial',
         color: '#ffd700',
